@@ -1,0 +1,47 @@
+Package: spatialss
+Type: Package
+Title: Spatial Analysis for Social Sciences - Book Companion
+Version: 0.1.0
+Authors@R: c(
+    person("Chong", "Chen", email = "cc458@tsinghua.edu.cn",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-0000-0000")))
+Description: Companion R package for the textbook "社会科学的空间分析"
+    (Spatial Analysis for Social Sciences). Provides all datasets and
+    utility functions needed to reproduce the analyses and examples
+    presented in the book. The package includes spatial data (vector
+    and raster), socioeconomic indicators, and helper functions for
+    loading and accessing book datasets.
+License: MIT + file LICENSE
+URL: https://github.com/cc458/spatialss
+BugReports: https://github.com/cc458/spatialss/issues
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 4.0.0)
+Imports:
+    sf,
+    raster,
+    ggplot2
+Suggests:
+    tmap,
+    tmaptools,
+    dplyr,
+    tidyr,
+    cowplot,
+    spdep,
+    spatialreg,
+    spgwr,
+    spData,
+    cshapes,
+    haven,
+    readxl,
+    countrycode,
+    splm,
+    plm,
+    knitr,
+    kableExtra,
+    rmarkdown,
+    remotes
+RoxygenNote: 7.3.2
+VignetteBuilder: knitr
