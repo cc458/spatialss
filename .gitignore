@@ -1,3 +1,5 @@
 *.tar.gz
 .Rhistory
 .DS_Store
+*_cache/
+*_files/

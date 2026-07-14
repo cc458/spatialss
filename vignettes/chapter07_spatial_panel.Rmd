@@ -16,13 +16,13 @@ knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
 
 ```{r}
 library(spatialss)
-library(sf)
 library(dplyr)
 library(ggplot2)
+library(tidyr)
 library(spdep)
 library(splm)
 library(plm)
-library(spatialreg)
+library(texreg)
 ```
 
 ## 加载 Chen CJIP 面板数据
@@ -83,7 +83,6 @@ rownames(mat) <- c("Observed", "Expected", "sd", "p.value")
 mat_df <- as.data.frame(t(mat))
 mat_df$year <- rownames(mat_df)
 
-library(tidyr)
 df_moran <- gather(mat_df, key = "Type", value = "Moran", Observed:Expected)
 
 ggplot(df_moran, aes(x = year, y = Moran, group = Type, linetype = Type)) +
@@ -122,7 +121,6 @@ rwtest(formula, data = data_balanced, w = dist_w400_rstd,
 ## 创建空间滞后项
 
 ```{r}
-library(tidyr)
 data_lag <- data_balanced |>
   arrange(cowcode, year) |>
   group_by(cowcode) |>
@@ -185,7 +183,6 @@ summary(model2_re)
 ## 模型比较
 
 ```{r results='asis'}
-library(texreg)
 texreg(list(model_pooling, model_fe, fm_WX, fm_Wy),
        custom.model.names = c("OLS", "FE", "WX", "Wy"),
        stars = c(0.01, 0.05, 0.1),

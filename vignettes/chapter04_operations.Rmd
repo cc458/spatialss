@@ -19,8 +19,6 @@ library(spatialss)
 library(sf)
 library(raster)
 library(dplyr)
-library(tidyr)
-library(spData)
 library(tmap)
 library(ggplot2)
 ```
@@ -87,7 +85,7 @@ tm_shape(sichuan_union) + tm_borders(col = "blue", lwd = 2) +
 
 ```{r}
 # 加载四川夜间灯光
-light_sc <- raster(spatialss_data("light_sc.tif"))
+light_sc <- load_nightlights(crop_to = "sichuan")
 light_sc
 ```
 

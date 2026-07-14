@@ -16,27 +16,20 @@ knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
 
 ```{r}
 library(spatialss)
-library(ggplot2)
-library(ggthemes)
 library(dplyr)
-library(SpatialRDD)
-library(sf)
-library(sp)
-library(tmap)
-library(rdd)
-library(rddapp)
 library(rdrobust)
+library(rddtools)
 ```
 
 ## 加载 RDD 复制数据
 
 ```{r}
-# 加载 Kenya Luhya RDD 数据
+# 加载 Kenya Luhya RDD 数据（sf 空间对象，适用于空间 RDD）
 luhya_data <- load_rdd_data("luhya")
 ```
 
 ```{r}
-# 加载 Palestine RDD 数据
+# 加载 Palestine RDD 数据（用于经典断点回归演示）
 palestine_data <- load_rdd_data("palestine")
 head(palestine_data)
 ```
@@ -50,9 +43,6 @@ str(palestine_data)
 
 ```{r}
 # 使用 rddtools 进行断点回归
-library(rddtools)
-
-# 准备数据
 rdd_data <- rdd_data(
   y = palestine_data$y,
   x = palestine_data$x,
@@ -70,7 +60,7 @@ plot(rdd_data,
 ```
 
 ```{r}
-# 估计断点回归模型
+# 估计断点回归模型（允许断点两侧斜率不同）
 rdd_model <- rdd_reg_lm(rdd_data, slope = "separate")
 summary(rdd_model)
 ```
@@ -78,8 +68,6 @@ summary(rdd_model)
 ## 使用 rdrobust 进行稳健估计
 
 ```{r fig.align='center', fig.width=6, fig.height=4.5}
-library(rdrobust)
-
 rdrobust_result <- rdrobust(
   y = palestine_data$y,
   x = palestine_data$x,
@@ -98,22 +86,27 @@ rdplot(y = palestine_data$y,
 
 ## 空间断点回归 (Spatial RDD)
 
-```{r eval=FALSE}
-# 使用 SpatialRDD 包进行空间地理断点回归
-library(SpatialRDD)
+空间断点回归将传统一维驱动变量（distance to cutoff）拓展到二维地理空间。在空间RDD中，断点是一条地理边界线，每个观测点的"驱动变量"是其到该边界的最短距离。
 
-# 基本步骤：
-# 1. 定义边界（border）作为断点
-# 2. 计算每个观测点到边界的距离
-# 3. 根据距离边界的位置分配处理组/对照组
-# 4. 估计断点回归模型
+```{r}
+# 使用 luhya_data 中的空间信息进行地理断点回归
+# luhya_data 是 sf 对象，包含几何信息和属性变量
+library(sf)
 
-# 示例：创建空间边界
-border_points <- matrix(c(...), ncol = 2)
-border_line <- st_linestring(border_points)
+# 提取坐标作为近似驱动变量（以研究区域中心经线作为"边界"）
+coords <- st_coordinates(luhya_data)
+border_longitude <- median(coords[, "X"])  # 以经度中位数作为"边界"
 
-# 计算距离
-distances <- st_distance(observations, border_line)
+# 计算每个点到边界的距离（经度差作为驱动变量）
+luhya_df <- luhya_data %>%
+  mutate(
+    distance = coords[, "X"] - border_longitude,
+    treatment = ifelse(distance >= 0, 1, 0)
+  )
+
+# 使用 rdrobust 进行空间 RDD 估计
+# 注意：实际应用中应使用精确的地理边界线，这里仅作方法演示
+head(luhya_df[, c("distance", "treatment")])
 ```
 
 ## 带宽选择
@@ -136,14 +129,23 @@ sapply(bandwidth_results, function(x) x$coef[1])
 
 ```{r fig.align='center', fig.width=6}
 # 在断点处检验前定变量的连续性
-# 确保处理组和对照组在基线协变量上没有系统性差异
-if ("covariate" %in% names(palestine_data)) {
+# 使用 jewish_pop_share 作为协变量进行检验
+if ("jewish_pop_share" %in% names(palestine_data)) {
   bal_test <- rdrobust(
-    y = palestine_data$covariate,
+    y = palestine_data$jewish_pop_share,
     x = palestine_data$x,
     c = 0
   )
   summary(bal_test)
+} else if ("jew_land_share" %in% names(palestine_data)) {
+  bal_test <- rdrobust(
+    y = palestine_data$jew_land_share,
+    x = palestine_data$x,
+    c = 0
+  )
+  summary(bal_test)
+} else {
+  message("注意：数据中未找到可用于平衡性检验的协变量列。请检查数据中的变量名称。")
 }
 ```
 

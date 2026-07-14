@@ -81,8 +81,8 @@ spatial_packages <- data.frame(
   分析任务 = c("数据管理", "与其他GIS系统交互", "点模式分析",
                "地统计分析", "疾病制图", "空间回归", "空间可视化"),
   R软件包 = c(
-    "`sp`, `sf`, `rgdal`, `maptools`",
-    "`rgdal`, `RgoogleMaps`, `spgrass6`, `R2WinBUGS`",
+    "`sp`, `sf`, `terra`, `stars`",
+    "`sf`, `RgoogleMaps`, `spgrass6`, `R2WinBUGS`",
     "`spatstat`, `splancs`, `spatialkernel`",
     "`gstat`, `geoR`, `geoRglm`, `spBayes`",
     "`DCluster`, `glmmBUGS`, `diseasemapping`",
@@ -108,7 +108,7 @@ install.packages(c("ggplot2", "tidyverse", "tmap", "sf"))
 ```{r eval=FALSE}
 library(dlstats)
 library(ggplot2)
-cran_stats(c("ggplot2", "sf", "tmap", "sp", "spdep", "rgdal")) |>
+cran_stats(c("ggplot2", "sf", "tmap", "sp", "spdep", "terra")) |>
   ggplot(aes(end, downloads, group = package, color = package)) +
   geom_line() +
   geom_point(aes(shape = package)) +

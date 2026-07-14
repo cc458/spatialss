@@ -17,9 +17,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
 ```{r}
 library(spatialss)
 library(spgwr)
-library(gwrr)
 library(GWmodel)
-library(haven)
 library(cshapes)
 library(sf)
 library(dplyr)
@@ -121,6 +119,10 @@ m_mixed
 
 ## 二分类因变量空间模型
 
+当因变量为二分类变量（如冲突发生/不发生）时，需要将空间依赖纳入离散选择模型框架。
+
+### 准备空间权重数据
+
 ```{r}
 dist_w <- load_dist_weights()
 
@@ -140,29 +142,19 @@ data_2000 <- data_2000 |>
   arrange(ccode)
 ```
 
+### 基准 Probit 模型（不含空间依赖）
+
 ```{r}
-# Probit 模型
 probit <- glm(total_wars_tm1 ~ civilwar_tm1 + milex,
               data = data_2000, family = binomial(link = "probit"))
 summary(probit)
 ```
 
-```{r warning=FALSE, message=FALSE}
-# 空间 Probit 模型（ML估计）
-library(McSpatial)
-s_probit <- spprobitml(total_wars_tm1 ~ civilwar_tm1 + milex,
-                       data = data_2000, wmat = dist_w400,
-                       stdprobit = FALSE)
-```
+### 空间 Probit 模型（贝叶斯 MCMC 估计）
+
+`spatialprobit` 包提供了贝叶斯 MCMC 方法估计空间自回归 Probit 模型（SAR Probit）。
 
 ```{r}
-# LGMM 估计
-lgmm <- spprobit(total_wars_tm1 ~ civilwar_tm1 + milex,
-                 data = data_2000, wmat = dist_w400)
-```
-
-```{r eval=FALSE}
-# 贝叶斯 SAR Probit 模型
 library(spatialprobit)
 W <- as(as_dgRMatrix_listw(mat2listw(dist_w400)), "CsparseMatrix")
 sp_probit <- sarprobit(total_wars_tm1 ~ civilwar_tm1 + milex,
@@ -170,6 +162,8 @@ sp_probit <- sarprobit(total_wars_tm1 ~ civilwar_tm1 + milex,
                        ndraw = 20000, burn.in = 10000, thinning = 1)
 summary(sp_probit)
 ```
+
+注：空间 Probit 模型的经典 ML 估计和 GMM 估计依赖于 `McSpatial` 包（`spprobitml()` 和 `gmmprobit()`），该包已于 2022 年从 CRAN 归档。如需要使用这些方法，可从 CRAN Archive 手动安装。
 
 ## 高阶空间效应与高阶相邻
 

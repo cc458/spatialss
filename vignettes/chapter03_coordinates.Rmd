@@ -21,8 +21,9 @@ library(sf)
 library(raster)
 library(tmap)
 library(tmaptools)
-library(cshapes)
 library(dplyr)
+library(spData)
+library(cowplot)
 ```
 
 ## 矢量数据读取
@@ -43,7 +44,6 @@ head(sf_drivers, n = 5)
 
 ```{r}
 # 使用 spData 示例数据
-library(spData)
 list.files(system.file("shapes", package = "spData"))
 ```
 
@@ -74,7 +74,6 @@ head(cycle_hire_xy)
 ## 栅格数据读取
 
 ```{r}
-library(raster)
 length(ls("package:raster"))
 ```
 
@@ -104,16 +103,15 @@ st_is_longlat(sichuan)
 ```
 
 ```{r}
-# 重投影
-sichuan_proj <- sichuan |> st_transform(27700)
+# 重投影（使用 CGCS2000 投影坐标系，适用于中国空间数据）
+sichuan_proj <- sichuan |> st_transform(4527)
 ```
 
 ```{r fig.align='center', fig.show='hold', out.width="100%"}
 p1 <- ggplot(sichuan) + geom_sf()
 p2 <- ggplot(sichuan_proj) + geom_sf() +
   coord_sf(datum = st_crs(sichuan_proj))
-library(cowplot)
-plot_grid(p1, p2, ncol = 2, labels = c("EPSG:4490", "EPSG:27700"))
+plot_grid(p1, p2, ncol = 2, labels = c("EPSG:4490", "EPSG:4527"))
 ```
 
 ## 距离计算
@@ -142,6 +140,6 @@ lonlat2UTM(c(116.39128, 39.90622))
 
 ```{r}
 # 加载并查看四川夜间灯光数据
-sc_light <- raster(spatialss_data("light_sc.tif"))
-st_crs(sc_light)$proj4string
+sc_light <- load_nightlights(crop_to = "sichuan")
+projection(sc_light)
 ```

@@ -17,10 +17,10 @@ knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
 ```{r}
 library(spatialss)
 library(spatialreg)
-library(cshapes)
-library(tidyverse)
+library(dplyr)
 library(sf)
 library(spdep)
+library(texreg)
 ```
 
 ## 加载军费支出数据
@@ -116,7 +116,6 @@ summary(impacts_sar, zstats = TRUE, short = TRUE)
 ## 模型比较
 
 ```{r results='asis'}
-library(texreg)
 texreg(list(ols_model, sar_model, sem_model, sdm_model),
        custom.model.names = c("OLS", "SAR", "SEM", "SDM"),
        caption = "空间计量模型比较")

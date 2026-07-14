@@ -166,6 +166,7 @@ mp <- moran.plot(
 ## 蒙特卡洛检验
 
 ```{r}
+set.seed(20260215)
 mc <- moran.mc(UNvoting$IdealPointDistance,
                 mat2listw(dist_w400_rstd),
                 zero.policy = TRUE, nsim = 1000)
