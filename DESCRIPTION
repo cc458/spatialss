@@ -42,6 +42,22 @@ Suggests:
     knitr,
     kableExtra,
     rmarkdown,
-    remotes
+    remotes,
+    texreg,
+    tidyverse,
+    maptools,
+    sp,
+    Matrix,
+    rdrobust,
+    rddtools,
+    rdd,
+    rddapp,
+    ggthemes,
+    sna,
+    GWmodel,
+    gwrr,
+    lubridate,
+    xtable,
+    stargazer
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr

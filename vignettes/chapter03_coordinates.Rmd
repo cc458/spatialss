@@ -1,0 +1,147 @@
+---
+title: "第三章 空间数据读取与坐标体系"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第三章：空间数据读取与坐标体系}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(ggplot2)
+library(sf)
+library(raster)
+library(tmap)
+library(tmaptools)
+library(cshapes)
+library(dplyr)
+```
+
+## 矢量数据读取
+
+```{r}
+# sf 包中的可用函数
+funs <- ls("package:sf")
+length(funs)
+funs[40:60]
+```
+
+```{r}
+# 查看 GDAL 驱动
+sf_drivers <- st_drivers()
+dim(sf_drivers)
+head(sf_drivers, n = 5)
+```
+
+```{r}
+# 使用 spData 示例数据
+library(spData)
+list.files(system.file("shapes", package = "spData"))
+```
+
+```{r}
+# 读取 Shapefile
+vector_filepath <- system.file("shapes/baltim.shp", package = "spData")
+baltim <- st_read(vector_filepath, quiet = TRUE)
+head(baltim)
+```
+
+```{r}
+# 读取 GeoPackage
+vector_filepath <- system.file("shapes/world.gpkg", package = "spData")
+world <- st_read(vector_filepath, quiet = TRUE)
+class(world)
+```
+
+```{r}
+# 从 CSV 读取空间数据
+cycle_hire_txt <- system.file("misc/cycle_hire_xy.csv", package = "spData")
+cycle_hire_xy <- st_read(cycle_hire_txt,
+                         options = c("X_POSSIBLE_NAMES=X",
+                                     "Y_POSSIBLE_NAMES=Y"),
+                         quiet = TRUE)
+head(cycle_hire_xy)
+```
+
+## 栅格数据读取
+
+```{r}
+library(raster)
+length(ls("package:raster"))
+```
+
+```{r fig.align='center', fig.cap="栅格数据示例"}
+raster_filepath <- system.file("raster/elev.tif", package = "spData")
+single_layer <- raster(raster_filepath)
+single_layer
+tm_shape(single_layer) + tm_raster()
+```
+
+## 加载并使用四川数据
+
+```{r}
+sichuan <- load_sichuan()
+cities_sf <- load_sichuan_coords()
+
+# 将坐标数据转换为 sf 对象
+cities_sf <- st_as_sf(cities_sf, coords = c("Lon", "Lat"), crs = 4490)
+```
+
+## 坐标参考系操作
+
+```{r}
+# 查看 CRS
+st_crs(sichuan)
+st_is_longlat(sichuan)
+```
+
+```{r}
+# 重投影
+sichuan_proj <- sichuan |> st_transform(27700)
+```
+
+```{r fig.align='center', fig.show='hold', out.width="100%"}
+p1 <- ggplot(sichuan) + geom_sf()
+p2 <- ggplot(sichuan_proj) + geom_sf() +
+  coord_sf(datum = st_crs(sichuan_proj))
+library(cowplot)
+plot_grid(p1, p2, ncol = 2, labels = c("EPSG:4490", "EPSG:27700"))
+```
+
+## 距离计算
+
+```{r}
+beijing_sf <- st_point(c(116.39128, 39.90622)) |>
+  st_sfc(crs = 4490)
+st_distance(beijing_sf, sichuan, which = "Great Circle")
+```
+
+## 计算 UTM 区域
+
+```{r}
+lonlat2UTM <- function(lonlat) {
+  utm <- (floor((lonlat[1] + 180) / 6) %% 60) + 1
+  if (lonlat[2] > 0) {
+    utm + 32600
+  } else {
+    utm + 32700
+  }
+}
+lonlat2UTM(c(116.39128, 39.90622))
+```
+
+## 栅格重投影
+
+```{r}
+# 加载并查看四川夜间灯光数据
+sc_light <- raster(spatialss_data("light_sc.tif"))
+st_crs(sc_light)$proj4string
+```

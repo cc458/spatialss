@@ -1,0 +1,126 @@
+---
+title: "第四章 空间数据运算"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第四章：空间数据运算}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(sf)
+library(raster)
+library(dplyr)
+library(tidyr)
+library(spData)
+library(tmap)
+library(ggplot2)
+```
+
+## 加载示例数据
+
+```{r}
+sichuan <- load_sichuan()
+china_counties <- load_china("counties")
+```
+
+```{r fig.align='center', fig.height=5}
+# 查看数据结构
+head(sichuan)
+```
+
+## 空间子集操作
+
+```{r}
+# 按属性子集化
+chengdu <- sichuan[sichuan$Region == "成都市", ]
+chengdu
+```
+
+```{r}
+# 加载世界数据
+world <- load_world()
+china <- load_china("province")
+china
+```
+
+## 几何运算 - 质心与缓冲区
+
+```{r fig.align='center', fig.height=5}
+# 计算几何中心
+sichuan_centroids <- st_centroid(sichuan)
+
+tm_shape(sichuan) + tm_borders() +
+  tm_shape(sichuan_centroids) + tm_dots(col = "red", size = 0.3) +
+  tm_layout(title = "四川地级市几何中心")
+```
+
+```{r fig.align='center', fig.height=5}
+# 缓冲区
+chengdu_centroid <- st_centroid(chengdu)
+chengdu_buffer <- st_buffer(chengdu_centroid, dist = 100000)
+
+tm_shape(sichuan) + tm_borders(alpha = 0.5) +
+  tm_shape(chengdu_buffer) + tm_borders(col = "red", lwd = 2) +
+  tm_layout(title = "成都市100公里缓冲区")
+```
+
+## 空间连接
+
+```{r fig.align='center', fig.height=5}
+# 空间汇合
+sichuan_union <- st_union(sichuan)
+
+tm_shape(sichuan_union) + tm_borders(col = "blue", lwd = 2) +
+  tm_layout(title = "四川省合并边界")
+```
+
+## 栅格数据运算
+
+```{r}
+# 加载四川夜间灯光
+light_sc <- raster(spatialss_data("light_sc.tif"))
+light_sc
+```
+
+```{r fig.align='center', fig.height=5}
+# 栅格子集化
+plot(light_sc, main = "四川省夜间灯光")
+```
+
+## 栅格与矢量交互
+
+```{r fig.align='center', fig.height=5}
+# 提取每个地级市的平均夜间灯光
+sichuan$mean_light <- raster::extract(light_sc, sichuan, fun = mean, na.rm = TRUE)
+
+tm_shape(sichuan) +
+  tm_fill(col = "mean_light",
+          palette = "YlOrRd",
+          title = "平均夜间灯光") +
+  tm_borders() +
+  tm_layout(title = "四川各地级市平均夜间灯光（2015）")
+```
+
+## 加载 Georgia 选举数据
+
+```{r}
+georgia_vtd <- load_georgia("vtd")
+georgia_vtd
+```
+
+## 加载 Africa 冲突数据
+
+```{r}
+africa_boundary <- load_africa_grid("boundary")
+africa_grid <- load_africa_grid("grid")
+africa_pcs <- load_africa_grid("pcs")
+```

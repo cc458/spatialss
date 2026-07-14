@@ -1,0 +1,165 @@
+---
+title: "第八章 空间因果推断"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第八章：空间因果推断}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+library(SpatialRDD)
+library(sf)
+library(sp)
+library(tmap)
+library(rdd)
+library(rddapp)
+library(rdrobust)
+```
+
+## 加载 RDD 复制数据
+
+```{r}
+# 加载 Kenya Luhya RDD 数据
+luhya_data <- load_rdd_data("luhya")
+```
+
+```{r}
+# 加载 Palestine RDD 数据
+palestine_data <- load_rdd_data("palestine")
+head(palestine_data)
+```
+
+## 基本断点回归
+
+```{r}
+# 查看数据结构
+str(palestine_data)
+```
+
+```{r}
+# 使用 rddtools 进行断点回归
+library(rddtools)
+
+# 准备数据
+rdd_data <- rdd_data(
+  y = palestine_data$y,
+  x = palestine_data$x,
+  cutpoint = 0
+)
+summary(rdd_data)
+```
+
+```{r fig.align='center', fig.width=6, fig.height=4.5}
+# 断点图
+plot(rdd_data,
+     main = "RDD Plot",
+     xlab = "Distance from Border (km)",
+     ylab = "Outcome")
+```
+
+```{r}
+# 估计断点回归模型
+rdd_model <- rdd_reg_lm(rdd_data, slope = "separate")
+summary(rdd_model)
+```
+
+## 使用 rdrobust 进行稳健估计
+
+```{r fig.align='center', fig.width=6, fig.height=4.5}
+library(rdrobust)
+
+rdrobust_result <- rdrobust(
+  y = palestine_data$y,
+  x = palestine_data$x,
+  c = 0
+)
+summary(rdrobust_result)
+
+# 断点图
+rdplot(y = palestine_data$y,
+       x = palestine_data$x,
+       c = 0,
+       title = "RD Plot - rdrobust",
+       x.label = "Distance from Border",
+       y.label = "Outcome")
+```
+
+## 空间断点回归 (Spatial RDD)
+
+```{r eval=FALSE}
+# 使用 SpatialRDD 包进行空间地理断点回归
+library(SpatialRDD)
+
+# 基本步骤：
+# 1. 定义边界（border）作为断点
+# 2. 计算每个观测点到边界的距离
+# 3. 根据距离边界的位置分配处理组/对照组
+# 4. 估计断点回归模型
+
+# 示例：创建空间边界
+border_points <- matrix(c(...), ncol = 2)
+border_line <- st_linestring(border_points)
+
+# 计算距离
+distances <- st_distance(observations, border_line)
+```
+
+## 带宽选择
+
+```{r fig.align='center', fig.width=6, fig.height=4.5}
+# 不同带宽下的估计结果比较
+bw_choices <- c(10, 20, 30, 50)
+bandwidth_results <- lapply(bw_choices, function(bw) {
+  rdrobust(y = palestine_data$y,
+           x = palestine_data$x,
+           c = 0,
+           h = bw)
+})
+
+names(bandwidth_results) <- paste0("bw=", bw_choices)
+sapply(bandwidth_results, function(x) x$coef[1])
+```
+
+## 平衡性检验
+
+```{r fig.align='center', fig.width=6}
+# 在断点处检验前定变量的连续性
+# 确保处理组和对照组在基线协变量上没有系统性差异
+if ("covariate" %in% names(palestine_data)) {
+  bal_test <- rdrobust(
+    y = palestine_data$covariate,
+    x = palestine_data$x,
+    c = 0
+  )
+  summary(bal_test)
+}
+```
+
+## 安慰剂检验
+
+```{r fig.align='center', fig.width=6}
+# 在非断点位置进行安慰剂检验
+placebo_cutoffs <- seq(-20, 20, 5)
+placebo_cutoffs <- placebo_cutoffs[placebo_cutoffs != 0]
+
+placebo_results <- sapply(placebo_cutoffs, function(cut) {
+  est <- rdrobust(y = palestine_data$y,
+                  x = palestine_data$x,
+                  c = cut)
+  c(cutoff = cut, coef = est$coef[1], pval = est$pv[1])
+})
+
+t(placebo_results)
+```

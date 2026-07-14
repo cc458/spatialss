@@ -1,0 +1,193 @@
+---
+title: "第七章 空间面板数据模型"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第七章：空间面板数据模型}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(spdep)
+library(splm)
+library(plm)
+library(spatialreg)
+```
+
+## 加载 Chen CJIP 面板数据
+
+```{r}
+data <- load_chen_cjip()
+dim(data)
+length(unique(data$cowcode))
+length(unique(data$year))
+```
+
+## 转换为平衡面板
+
+```{r}
+data_balanced <- make.pbalanced(data, index = c("cowcode", "year"),
+                                 balance.type = "shared.individuals")
+length(unique(data_balanced$cowcode))
+length(unique(data_balanced$year))
+```
+
+## 准备空间权重矩阵
+
+```{r}
+dist_w <- load_dist_weights()
+
+# 400km 阈值
+dist_w400 <- dist_w
+dist_w400[dist_w400 <= 400] <- 1
+dist_w400[dist_w400 > 400] <- 0
+diag(dist_w400) <- 0
+
+# 移除孤岛
+omits <- which(rowSums(dist_w400) == 0)
+dist_w400 <- dist_w400[-omits, -omits]
+dist_w400_rstd <- dist_w400 / rowSums(dist_w400)
+dim(dist_w400_rstd)
+
+# 筛选数据匹配权重矩阵
+data_balanced <- data_balanced |>
+  filter(cowcode %in% as.numeric(rownames(dist_w400_rstd))) |>
+  arrange(cowcode, year)
+dim(data_balanced)
+```
+
+## 因变量的空间依赖性检验
+
+```{r fig.align='center', fig.cap="因变量的空间依赖检验", out.width="80%"}
+years <- unique(data_balanced$year)
+moran_results <- lapply(years, function(yr) {
+  df_slice <- data_balanced |> filter(year == yr)
+  ape::Moran.I(df_slice$logidealdistance, weight = dist_w400_rstd)
+})
+
+mat <- sapply(moran_results, unlist)
+colnames(mat) <- years
+rownames(mat) <- c("Observed", "Expected", "sd", "p.value")
+
+mat_df <- as.data.frame(t(mat))
+mat_df$year <- rownames(mat_df)
+
+library(tidyr)
+df_moran <- gather(mat_df, key = "Type", value = "Moran", Observed:Expected)
+
+ggplot(df_moran, aes(x = year, y = Moran, group = Type, linetype = Type)) +
+  geom_point() + geom_line() +
+  scale_x_discrete(breaks = seq(1979, 2014, 5)) +
+  labs(x = "Year", y = "Moran's I") +
+  theme_bw() +
+  theme(legend.title = element_blank(),
+        legend.position = "bottom",
+        text = element_text(size = 10))
+```
+
+## 普通面板模型
+
+```{r}
+formula <- logidealdistance ~ laglogidealdistance + statefrom.total +
+  logpop + loggdppc + tradependonCHN + v2x_polyarchy +
+  capratio + dip_hist + solschange
+
+# 混合 OLS
+model_pooling <- plm(formula, data = data_balanced,
+                     index = c("cowcode", "year"), model = "pooling")
+
+# 固定效应
+model_fe <- plm(formula, data = data_balanced,
+                index = c("cowcode", "year"), model = "within")
+```
+
+## 面板残差空间依赖性检验
+
+```{r}
+rwtest(formula, data = data_balanced, w = dist_w400_rstd,
+       index = c("cowcode", "year"))
+```
+
+## 创建空间滞后项
+
+```{r}
+library(tidyr)
+data_lag <- data_balanced |>
+  arrange(cowcode, year) |>
+  group_by(cowcode) |>
+  mutate(time_order = row_number()) |>
+  ungroup() |>
+  arrange(year, cowcode) |>
+  mutate(
+    splag_x = as.vector(kronecker(diag(1, 36), dist_w400_rstd) %*% statefrom.total),
+    splag_y = as.vector(kronecker(diag(1, 36), dist_w400_rstd) %*% logidealdistance)
+  ) |>
+  arrange(cowcode, year)
+```
+
+## 空间 OLS (SLX 与 Wy)
+
+```{r}
+fm_WX <- plm(logidealdistance ~ laglogidealdistance + statefrom.total +
+              logpop + loggdppc + tradependonCHN + v2x_polyarchy +
+              capratio + dip_hist + solschange + splag_x,
+             data = data_lag, index = c("cowcode", "year"), model = "within")
+
+fm_Wy <- plm(logidealdistance ~ laglogidealdistance + statefrom.total +
+              logpop + loggdppc + tradependonCHN + v2x_polyarchy +
+              capratio + dip_hist + solschange + splag_y,
+             data = data_lag, index = c("cowcode", "year"), model = "within")
+```
+
+## 固定效应空间面板模型 (ML)
+
+```{r}
+data_complete <- data_balanced |>
+  select(cowcode, year, logidealdistance, statefrom.total,
+         logpop, loggdppc, tradependonCHN, v2x_polyarchy,
+         capratio, dip_hist, solschange) |>
+  na.omit()
+
+model1_fe <- spml(logidealdistance ~ statefrom.total +
+                   logpop + loggdppc + tradependonCHN + v2x_polyarchy +
+                   capratio + dip_hist + solschange,
+                  data = data_complete,
+                  listw = mat2listw(dist_w400_rstd, style = "W"),
+                  model = "within",
+                  spatial.error = "none", lag = TRUE)
+summary(model1_fe)
+```
+
+## 随机效应空间面板模型
+
+```{r}
+model2_re <- spml(logidealdistance ~ statefrom.total +
+                   logpop + loggdppc + tradependonCHN + v2x_polyarchy +
+                   capratio + dip_hist + solschange,
+                  data = data_complete,
+                  listw = mat2listw(dist_w400_rstd, style = "W"),
+                  model = "random",
+                  spatial.error = "none", lag = TRUE)
+summary(model2_re)
+```
+
+## 模型比较
+
+```{r results='asis'}
+library(texreg)
+texreg(list(model_pooling, model_fe, fm_WX, fm_Wy),
+       custom.model.names = c("OLS", "FE", "WX", "Wy"),
+       stars = c(0.01, 0.05, 0.1),
+       caption = "面板数据空间模型比较")
+```

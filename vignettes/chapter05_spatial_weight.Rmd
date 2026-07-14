@@ -1,0 +1,196 @@
+---
+title: "第五章 空间权重矩阵与空间自相关"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第五章：空间权重矩阵与空间自相关}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(sf)
+library(spdep)
+library(dplyr)
+library(ggplot2)
+library(cshapes)
+library(countrycode)
+```
+
+## 加载四川数据并创建邻接关系
+
+```{r warning=FALSE}
+sichuan <- load_sichuan()
+nrow(sichuan)
+```
+
+```{r warning=FALSE, fig.cap="基于共享边界的相邻", fig.width=6, fig.height=6, fig.align='center'}
+# 使用 rook 准则创建邻接关系
+continuity.nb <- poly2nb(sichuan, queen = FALSE)
+continuity.nb
+
+sichuan_sp <- as_Spatial(sichuan, cast = TRUE)
+plot(sichuan_sp, border = "grey", main = "")
+plot(continuity.nb, coordinates(sichuan_sp),
+     add = TRUE, col = "blue", lwd = 1.5, pch = 19)
+```
+
+```{r warning=FALSE}
+# 使用 queen 准则
+continuity.nb_queen <- poly2nb(sichuan, queen = TRUE)
+continuity.nb_queen
+```
+
+## 创建空间权重矩阵
+
+```{r}
+# 转换为空间权重列表
+continuity.listw <- nb2listw(continuity.nb, style = "W", zero.policy = TRUE)
+summary(continuity.listw, zero.policy = TRUE)
+```
+
+## 基于距离的方法
+
+```{r warning=FALSE}
+# 获取质心坐标
+centroids <- st_centroid(sichuan)
+coords <- st_coordinates(centroids)
+
+# 100km距离阈值
+nb_distance <- dnearneigh(coords, longlat = TRUE, d1 = 0, d2 = 100)
+listw.100km <- nb2listw(nb_distance, style = "W", zero.policy = TRUE)
+summary(listw.100km, zero.policy = TRUE)
+```
+
+## K最近邻法
+
+```{r}
+k <- 4
+nb_knn <- knn2nb(knearneigh(coords, k = k))
+nb_knn
+```
+
+```{r}
+# 矩阵形式
+knn_mat <- nb2mat(nb_knn, zero.policy = TRUE, style = 'B')
+knn_mat[1:10, 1:10]
+```
+
+## 行标准化
+
+```{r}
+knn_mat_w <- nb2mat(nb_knn, zero.policy = TRUE, style = 'W')
+knn_mat_w[1:10, 1:10]
+rowSums(knn_mat_w[1:5, ])
+```
+
+## 研究示例：撒哈拉以南非洲对华政策偏好
+
+```{r warning=FALSE, message=FALSE}
+# 加载 UN 投票数据
+UNvoting <- load_un_votes()
+
+# 创建非洲空间数据
+world <- cshp(date = as.Date("2019-01-01"), useGW = TRUE)
+world <- world |>
+  mutate(region = countrycode(gwcode, "gwn", "region")) |>
+  filter(region == "Sub-Saharan Africa")
+
+# 加载距离权重矩阵
+dist_w <- load_dist_weights()
+gwcode <- sort(unique(world$gwcode))
+dist_w <- dist_w[rownames(dist_w) %in% gwcode, colnames(dist_w) %in% gwcode]
+dim(dist_w)
+```
+
+```{r}
+# 准备投票数据
+UNvoting <- UNvoting |>
+  filter(ccode1 == 710) |>
+  filter(year == 2019) |>
+  filter(ccode2 %in% unique(world$gwcode)) |>
+  arrange(ccode2) |>
+  ungroup() |>
+  select(ccode1, ccode2, year, agree, IdealPointDistance)
+```
+
+```{r}
+# 创建400km距离权重的邻接矩阵
+dist_w400 <- dist_w
+dist_w400[dist_w400 <= 400] <- 1
+dist_w400[dist_w400 > 400] <- 0
+diag(dist_w400) <- 0
+
+# 处理孤岛
+omits <- which(rowSums(dist_w400) == 0)
+omits
+dist_w400 <- dist_w400[-omits, -omits]
+dist_w400_rstd <- dist_w400 / rowSums(dist_w400)
+
+# 同步过滤投票数据
+UNvoting <- UNvoting |>
+  filter(ccode2 != 402) |>
+  filter(ccode2 != 590)
+
+# 创建空间滞后变量
+UNvoting$neighbor_voting <- dist_w400_rstd %*% UNvoting$IdealPointDistance
+head(UNvoting)
+```
+
+## 全局 Moran's I 检验
+
+```{r}
+# 解析解
+moran.test(as.vector(UNvoting$IdealPointDistance),
+           mat2listw(dist_w400_rstd))
+```
+
+```{r fig.align='center', fig.width=5, fig.height=5}
+# Moran 散点图
+mp <- moran.plot(
+  as.vector(UNvoting$IdealPointDistance),
+  mat2listw(dist_w400_rstd),
+  xlab = "Distance of Ideal Points",
+  ylab = "Neighboring Distances",
+  labels = as.character(UNvoting$ccode2)
+)
+```
+
+## 蒙特卡洛检验
+
+```{r}
+mc <- moran.mc(UNvoting$IdealPointDistance,
+                mat2listw(dist_w400_rstd),
+                zero.policy = TRUE, nsim = 1000)
+mc
+```
+
+```{r fig.align='center', fig.width=5, fig.height=4.5}
+plot(mc, main = "", las = 1)
+```
+
+## 局部空间自相关 (LISA)
+
+```{r}
+lmoran <- localmoran(as.vector(UNvoting$IdealPointDistance),
+                     mat2listw(dist_w400))
+UNvoting$LISA <- lmoran[, 1]
+head(UNvoting[, c("ccode2", "IdealPointDistance", "LISA")])
+```
+
+## 非地理空间权重矩阵示例
+
+```{r eval=FALSE}
+# 基于共同国际组织成员身份的权重矩阵
+library(peacesciencer)
+igo <- create_dyadyears(system = "cow", directed = FALSE,
+                        subset_years = 2010) |>
+      add_igos()
+```

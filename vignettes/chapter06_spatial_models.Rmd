@@ -1,0 +1,123 @@
+---
+title: "第六章 空间计量模型基础"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第六章：空间计量模型基础}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(spatialreg)
+library(cshapes)
+library(tidyverse)
+library(sf)
+library(spdep)
+```
+
+## 加载军费支出数据
+
+```{r}
+data <- load_military_spending()
+head(data)
+```
+
+```{r}
+# 以 2010 年为例
+data_2010 <- data |>
+  filter(year == 2010) |>
+  filter(ccode != 713)
+dim(data_2010)
+```
+
+## 加载距离权重矩阵并准备数据
+
+```{r}
+dist_w <- load_dist_weights()
+
+# 创建 400km 距离阈值二值矩阵
+dist_w400 <- dist_w
+dist_w400[dist_w400 <= 400] <- 1
+dist_w400[dist_w400 > 400] <- 0
+diag(dist_w400) <- 0
+
+# 移除孤岛
+omits <- which(rowSums(dist_w400) == 0)
+dist_w400 <- dist_w400[-omits, -omits]
+dist_w400_rstd <- dist_w400 / rowSums(dist_w400)
+
+# 使数据与权重矩阵匹配
+keep_codes <- as.numeric(rownames(dist_w400_rstd))
+data_2010 <- data_2010 |>
+  filter(ccode %in% keep_codes) |>
+  arrange(ccode)
+dim(data_2010)
+```
+
+## 估计 OLS 基准模型
+
+```{r}
+ols_model <- lm(milex ~ civilwar_tm1 + total_wars_tm1 + logpop + loggdppc,
+                data = data_2010)
+summary(ols_model)
+```
+
+## OLS 残差的空间依赖性检验
+
+```{r}
+listw400 <- mat2listw(dist_w400_rstd, style = "W")
+lm.morantest(ols_model, listw400)
+```
+
+## 空间滞后模型 (SAR)
+
+```{r}
+sar_model <- lagsarlm(milex ~ civilwar_tm1 + total_wars_tm1 + logpop + loggdppc,
+                      data = data_2010, listw = listw400)
+summary(sar_model)
+```
+
+## 空间误差模型 (SEM)
+
+```{r}
+sem_model <- errorsarlm(milex ~ civilwar_tm1 + total_wars_tm1 + logpop + loggdppc,
+                        data = data_2010, listw = listw400)
+summary(sem_model)
+```
+
+## 空间杜宾模型 (SDM)
+
+```{r}
+sdm_model <- lagsarlm(milex ~ civilwar_tm1 + total_wars_tm1 + logpop + loggdppc,
+                      data = data_2010, listw = listw400,
+                      type = "mixed")
+summary(sdm_model)
+```
+
+## 计算直接与间接效应
+
+```{r}
+# 转换权重矩阵为稀疏矩阵格式
+sparse_W <- listw2dgCMatrix(listw400)
+
+# 计算效应
+impacts_sar <- impacts(sar_model, listw = listw400)
+summary(impacts_sar, zstats = TRUE, short = TRUE)
+```
+
+## 模型比较
+
+```{r results='asis'}
+library(texreg)
+texreg(list(ols_model, sar_model, sem_model, sdm_model),
+       custom.model.names = c("OLS", "SAR", "SEM", "SDM"),
+       caption = "空间计量模型比较")
+```

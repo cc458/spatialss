@@ -45,6 +45,22 @@ ged <- load_ged()
 coords <- load_sichuan_coords()
 ```
 
+## Chapter Vignettes
+
+Each book chapter has a corresponding vignette with executable R code:
+
+```r
+# List all vignettes
+vignette(package = "spatialss")
+
+# Open a specific chapter vignette
+vignette("chapter01_introduction", package = "spatialss")
+vignette("chapter02_visualization", package = "spatialss")
+vignette("chapter05_spatial_weight", package = "spatialss")
+```
+
+Vignettes use package functions (`load_sichuan()`, `load_nightlights()`, etc.) instead of direct file paths, making the code portable and self-contained.
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.

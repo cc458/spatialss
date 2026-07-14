@@ -1,0 +1,118 @@
+---
+title: "第一章 导论 - 空间分析与R语言入门"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第一章：导论}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+## 安装和加载 spatialss 包
+
+```{r eval=FALSE}
+library(remotes)
+install_github("cc458/spatialss")
+```
+
+```{r}
+library(spatialss)
+```
+
+## 列出所有可用数据
+
+```{r}
+spatialss_list_data()
+```
+
+## R 基础操作演示
+
+```{r}
+sum(1:100)
+```
+
+```{r}
+x <- 1:10
+y <- x^2
+plot(x, y,
+     main = "Scatter plot demo",
+     xlab = "X",
+     ylab = "Y",
+     col = "blue",
+     pch = 19)
+```
+
+## 空间分析软件比较
+
+```{r results='asis'}
+library(knitr)
+library(kableExtra)
+
+tab_all <- data.frame(
+  软件 = c("ArcGIS", "GeoBUGS", "GeoDa", "GRASS", "R", "STARS"),
+  是否收费 = c("付费", "免费", "免费", "免费", "免费", "免费"),
+  学习难度 = c("中等", "高", "低", "高", "中/高", "低"),
+  主要功能 = c(
+    "地理处理、可视化",
+    "贝叶斯空间分析",
+    "探索性空间数据分析、经典空间回归",
+    "影像处理、空间建模",
+    "空间权重构建、空间计量、地统计分析",
+    "时空分析"
+  ),
+  stringsAsFactors = FALSE
+)
+
+kable(tab_all, booktabs = TRUE,
+      caption = "空间分析软件比较") |>
+  kable_styling(font_size = 12, full_width = FALSE)
+```
+
+## R 空间分析包分类
+
+```{r results='asis'}
+spatial_packages <- data.frame(
+  分析任务 = c("数据管理", "与其他GIS系统交互", "点模式分析",
+               "地统计分析", "疾病制图", "空间回归", "空间可视化"),
+  R软件包 = c(
+    "`sp`, `sf`, `rgdal`, `maptools`",
+    "`rgdal`, `RgoogleMaps`, `spgrass6`, `R2WinBUGS`",
+    "`spatstat`, `splancs`, `spatialkernel`",
+    "`gstat`, `geoR`, `geoRglm`, `spBayes`",
+    "`DCluster`, `glmmBUGS`, `diseasemapping`",
+    "`spdep`, `spgwr`, `spatcounts`, `spml`",
+    "`ggplot2`, `tmap`, `leaflet`, `mapview`, `plotly`, `rasterVis`"
+  ),
+  stringsAsFactors = FALSE
+)
+
+kable(spatial_packages, booktabs = TRUE,
+      caption = "R语言空间分析包分类") |>
+  kable_styling(font_size = 12, full_width = FALSE)
+```
+
+## 安装常用空间分析包
+
+```{r eval=FALSE}
+install.packages(c("ggplot2", "tidyverse", "tmap", "sf"))
+```
+
+## 查看软件包下载趋势
+
+```{r eval=FALSE}
+library(dlstats)
+library(ggplot2)
+cran_stats(c("ggplot2", "sf", "tmap", "sp", "spdep", "rgdal")) |>
+  ggplot(aes(end, downloads, group = package, color = package)) +
+  geom_line() +
+  geom_point(aes(shape = package)) +
+  xlab("") + theme_bw() +
+  scale_x_date(date_breaks = "6 month", date_labels = "%Y-%m") +
+  theme(text = element_text(size = 8))
+```

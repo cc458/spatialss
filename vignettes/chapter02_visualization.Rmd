@@ -1,0 +1,130 @@
+---
+title: "第二章 空间数据可视化"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第二章：空间数据可视化}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(ggplot2)
+library(sf)
+library(raster)
+library(cowplot)
+library(tmap)
+library(tmaptools)
+library(dplyr)
+```
+
+## 加载四川地级市数据
+
+```{r}
+sichuan <- load_sichuan()
+head(sichuan)
+```
+
+```{r}
+# 查看数据结构
+class(sichuan)
+names(sichuan)
+```
+
+## Base R 绘图
+
+```{r fig.align='center', fig.height=4}
+plot(sichuan["export22"],
+     main = "2022年四川地级市出口总额",
+     key.pos = 1,
+     axes = TRUE)
+```
+
+## ggplot2 绘制地图
+
+```{r fig.align='center', fig.height=4}
+ggplot(data = sichuan) +
+  geom_sf(aes(fill = export22)) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  theme_minimal() +
+  labs(title = "四川省地级市出口总额（2022）",
+       fill = "出口额")
+```
+
+## 添加城市标注
+
+```{r fig.align='center', fig.height=4}
+coords <- load_sichuan_coords()
+head(coords)
+
+ggplot(data = sichuan) +
+  geom_sf(fill = "white", color = "grey50") +
+  geom_text(data = coords, aes(x = Lon, y = Lat, label = City),
+            size = 3, color = "darkred") +
+  theme_minimal() +
+  labs(title = "四川省地级市分布")
+```
+
+## tmap 专题地图
+
+```{r fig.align='center', fig.height=5}
+tm_shape(sichuan) +
+  tm_borders() +
+  tm_fill(col = "export22",
+          palette = "Blues",
+          title = "出口总额") +
+  tm_layout(title = "2022年四川地级市出口总额")
+```
+
+## tmap 图层叠加
+
+```{r fig.align='center', fig.height=5}
+tm_shape(sichuan) +
+  tm_borders(col = "grey40") +
+  tm_fill(col = "export22",
+          palette = "YlOrRd",
+          title = "出口总额",
+          style = "quantile") +
+  tm_compass(position = c("left", "top")) +
+  tm_scale_bar(position = c("left", "bottom")) +
+  tm_layout(title = "四川省出口总额",
+            legend.position = c("right", "bottom"))
+```
+
+## 加载并可视化栅格数据 - 夜间灯光
+
+```{r}
+nightlights <- load_nightlights()
+nightlights
+```
+
+```{r fig.align='center', fig.height=5}
+# 裁剪到四川范围
+light_sc <- load_nightlights(crop_to = "sichuan")
+```
+
+```{r fig.align='center', fig.height=5}
+tm_shape(light_sc) +
+  tm_raster(palette = "YlOrRd",
+            title = "夜间灯光强度",
+            style = "cont") +
+  tm_layout(title = "四川省夜间灯光（2015）")
+```
+
+## 加载伊拉克数据
+
+```{r}
+iraq <- load_iraq_gov()
+head(iraq)
+
+# 伊拉克宵禁前后冲突数据
+curfew_data <- load_iraq_curfew("curfew")
+head(curfew_data)
+```

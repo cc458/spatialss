@@ -1,0 +1,211 @@
+---
+title: "第九章 其他空间分析议题"
+author: "陈冲"
+date: "2026-01-15"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{第九章：其他空间分析议题}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+                      message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(spatialss)
+library(spgwr)
+library(gwrr)
+library(GWmodel)
+library(haven)
+library(cshapes)
+library(sf)
+library(dplyr)
+library(spdep)
+```
+
+## 地理加权回归 (GWR)
+
+### 加载数据
+
+```{r}
+data <- load_military_spending()
+data_2000 <- data |>
+  filter(year == 2000) |>
+  filter(ccode != 713)
+dim(data_2000)
+```
+
+### 基准 OLS 模型
+
+```{r}
+lm_model <- lm(milex ~ civilwar_tm1 + total_wars_tm1, data = data_2000)
+summary(lm_model)
+```
+
+### 准备空间数据
+
+```{r}
+# 获取国家几何中心坐标
+world_map <- cshp(date = as.Date("2000-01-01"), useGW = FALSE)
+world_map <- st_make_valid(world_map)
+coords <- st_centroid(world_map)
+
+data_2000 <- left_join(data_2000,
+                       coords |> select(cowcode, geometry),
+                       by = c("ccode" = "cowcode"))
+map_sp <- as_Spatial(st_sf(data_2000))
+class(map_sp)
+```
+
+### 选择最优带宽
+
+```{r}
+# 自适应空间核
+bw_adapt <- gwr.sel(milex ~ civilwar_tm1 + total_wars_tm1,
+                    data = map_sp, adapt = TRUE, RMSE = TRUE)
+bw_adapt
+```
+
+```{r}
+# 固定空间核
+bw_fixed <- gwr.sel(milex ~ civilwar_tm1 + total_wars_tm1,
+                    data = map_sp, adapt = FALSE, RMSE = TRUE)
+bw_fixed
+```
+
+### 估计 GWR 模型
+
+```{r}
+gwr_model <- gwr(milex ~ civilwar_tm1 + total_wars_tm1,
+                 data = map_sp, adapt = bw_adapt, hatmatrix = TRUE)
+gwr_model
+```
+
+### GWR 模型检验
+
+```{r}
+# 检验 GWR 是否比 OLS 更合适
+LMZ.F1GWR.test(gwr_model)
+```
+
+```{r}
+# 检验参数变异的显著性
+LMZ.F3GWR.test(gwr_model)
+```
+
+```{r}
+# 残差空间依赖性检验
+neib <- knearneigh(map_sp, k = 6)
+neib_nb <- knn2nb(neib)
+gwr.morantest(gwr_model, nb2listw(neib_nb))
+```
+
+```{r}
+# OLS 残差检验（对比）
+lm.morantest(lm_model, nb2listw(neib_nb))
+```
+
+## 混合地理加权模型
+
+```{r}
+m_mixed <- GWmodel::gwr.mixed(milex ~ civilwar_tm1 + total_wars_tm1,
+                              data = map_sp, fixed.vars = "civilwar_tm1",
+                              bw = bw_fixed, diagnostic = TRUE,
+                              intercept.fixed = FALSE, adaptive = TRUE,
+                              kernel = "gaussian")
+m_mixed
+```
+
+## 二分类因变量空间模型
+
+```{r}
+dist_w <- load_dist_weights()
+
+# 创建 400km 距离阈值矩阵
+dist_w400 <- dist_w
+dist_w400[dist_w400 <= 400] <- 1
+dist_w400[dist_w400 > 400] <- 0
+diag(dist_w400) <- 0
+
+omits <- which(rowSums(dist_w400) == 0)
+dist_w400 <- dist_w400[-omits, -omits]
+dist_w400_rstd <- dist_w400 / rowSums(dist_w400)
+
+# 筛选数据
+data_2000 <- data_2000 |>
+  filter(ccode %in% as.numeric(rownames(dist_w400_rstd))) |>
+  arrange(ccode)
+```
+
+```{r}
+# Probit 模型
+probit <- glm(total_wars_tm1 ~ civilwar_tm1 + milex,
+              data = data_2000, family = binomial(link = "probit"))
+summary(probit)
+```
+
+```{r warning=FALSE, message=FALSE}
+# 空间 Probit 模型（ML估计）
+library(McSpatial)
+s_probit <- spprobitml(total_wars_tm1 ~ civilwar_tm1 + milex,
+                       data = data_2000, wmat = dist_w400,
+                       stdprobit = FALSE)
+```
+
+```{r}
+# LGMM 估计
+lgmm <- spprobit(total_wars_tm1 ~ civilwar_tm1 + milex,
+                 data = data_2000, wmat = dist_w400)
+```
+
+```{r eval=FALSE}
+# 贝叶斯 SAR Probit 模型
+library(spatialprobit)
+W <- as(as_dgRMatrix_listw(mat2listw(dist_w400)), "CsparseMatrix")
+sp_probit <- sarprobit(total_wars_tm1 ~ civilwar_tm1 + milex,
+                       data = data_2000, W = W,
+                       ndraw = 20000, burn.in = 10000, thinning = 1)
+summary(sp_probit)
+```
+
+## 高阶空间效应与高阶相邻
+
+```{r}
+library(sna)
+
+# 创建示例空间权重矩阵
+actors <- c("A", "B", "C", "D", "E", "F")
+w <- matrix(c(0, 1, 1, 1, 0, 0,
+              1, 0, 0, 1, 1, 0,
+              1, 0, 0, 1, 0, 0,
+              1, 1, 1, 0, 0, 1,
+              0, 1, 0, 0, 0, 0,
+              0, 0, 0, 1, 0, 0),
+            ncol = 6, nrow = 6,
+            dimnames = list(actors, actors))
+w <- as.sociomatrix.sna(w)
+w
+```
+
+```{r}
+# 二阶相邻
+w2nd <- neighborhood(w, 2)
+w2nd
+```
+
+```{r}
+# 二阶效应矩阵
+w_2 <- w %*% w
+w_2
+```
+
+```{r}
+# 使用 spdep 创建高阶相邻
+nb <- mat2listw(w)
+w_2nb <- nblag(nb$neighbours, maxlag = 2)
+w_2nb
+lapply(w_2nb, nb2mat, style = "B", zero.policy = TRUE)
+```
