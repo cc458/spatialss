@@ -4,13 +4,13 @@ author: "陈冲"
 date: "2026-01-15"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{第一章：导论}
+  %\VignetteIndexEntry{第一章 导论 - 空间分析与R语言入门}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(fig.width = 6, fig.height = 3, cache = TRUE,
+knitr::opts_chunk$set(eval = FALSE, fig.width = 6, fig.height = 3, cache = TRUE,
                       message = FALSE, warning = FALSE)
 ```
 
