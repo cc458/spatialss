@@ -4,10 +4,31 @@ Companion R package for the textbook **《社会科学的空间分析》** (Spat
 
 ## Installation
 
+### 方法一：从 GitHub 安装（推荐）
+
 ```r
 library(remotes)
-install_github("cc458/spatialss")
+install_github("cc458/spatialss", build_vignettes = TRUE)
 library(spatialss)
+```
+
+### 方法二：从源文件安装
+
+如果 GitHub 下载遇到网络问题，可以从 [Releases 页面](https://github.com/cc458/spatialss/releases) 下载 `.tar.gz` 源文件，然后在 R 中安装：
+
+```r
+# 安装下载的 tar.gz 文件（替换为实际路径）
+install.packages("spatialss_0.1.0.tar.gz", repos = NULL, type = "source")
+library(spatialss)
+```
+
+### 方法三：使用 Git 克隆后本地安装
+
+```bash
+git clone https://github.com/cc458/spatialss.git
+cd spatialss
+R CMD build .
+R CMD INSTALL spatialss_0.1.0.tar.gz
 ```
 
 ## Data Overview
